@@ -1,0 +1,46 @@
+# Ignore system-generated files
+.DS_Store
+Thumbs.db
+
+# Ignore node modules (if using npm)
+node_modules/
+
+# Ignore compiled PHP files
+*.log
+*.cache
+
+# Ignore environment and configuration files
+.env
+config.php
+composer.lock
+
+# Ignore IDE/editor temporary files
+*.swp        # Vi/Vim swap files
+*.swo
+*.bak        # Backup files
+*.tmp        # Generic temp files
+*~           # Emacs backup files
+*_history/   # Emacs temporary history files
+
+# Ignore Microsoft VS Code files
+.vscode/
+*.code-workspace
+
+# Ignore vendor dependencies (if using Composer)
+vendor/
+
+# Ignore coverage reports and test results
+coverage/
+test-results/
+phpunit.xml
+
+# Ignore uploads and runtime-generated files
+/data/
+
+# Ignore configuration files
+config/brochat.conf
+config/brochat-devel.conf
+
+# Ignore log files
+logs/
+

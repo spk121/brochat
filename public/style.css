@@ -94,3 +94,18 @@ tr:nth-child(even) {
     color: #555;
     margin-top: 0.25rem;
 }
+
+/* One to four pictures, arranged in a row, that can wrap. */
+.snap-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.snap-gallery img {
+    flex: 1 1 200px;
+    max-width: 400px; /* Adjusts dynamically */
+    height: auto;
+    cursor: pointer;
+}
