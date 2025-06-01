@@ -5,6 +5,11 @@
 const VERSION = '0.1';
 const PROGRAM_NAME = 'configure';
 
+// Verbosity levels
+const VERBOSITY_QUIET = 0;
+const VERBOSITY_NORMAL = 1;
+const VERBOSITY_VERBOSE = 2;
+
 // Default configuration values
 $config = [
     'prefix' => '/usr/local',
@@ -18,21 +23,32 @@ $config = [
     'mode' => 'DEVELOPMENT', // Default to development mode
 ];
 
+// Global verbosity setting
+$verbosity = VERBOSITY_NORMAL;
+
+function log_message($message, $level = VERBOSITY_NORMAL, $to_stderr = false) {
+    global $verbosity;
+    if ($verbosity >= $level) {
+        $output = $to_stderr ? STDERR : STDOUT;
+        fwrite($output, $message . "\n");
+    }
+}
+
 function parse_arguments() {
-    global $config, $argv;
+    global $config, $argv, $verbosity;
 
     // Parse GNU-standard long options
     $short_opts = '';
     $long_opts = [
         'prefix:', 'datarootdir:', 'datadir:', 'localstatedir:', 'sysconfdir:',
         'srcdir:', 'builddir:',
-        'version', 'help', 'wtf', 'fml'
+        'version', 'help', 'wtf', 'fml',
+        'verbose', 'quiet'
     ];
     $options = getopt($short_opts, $long_opts);
 
     // Extract all long options from $argv
     $provided_long_opts = [];
-    global $argv;
     foreach ($argv as $arg) {
         if (preg_match('/^--([a-zA-Z0-9-]+)(?:=.*)?$/', $arg, $matches)) {
             $provided_long_opts[] = $matches[1];
@@ -41,79 +57,93 @@ function parse_arguments() {
 
     // Check for unrecognized long options
     foreach ($provided_long_opts as $opt) {
-        // Remove trailing ':' from $long_opts for comparison
         $valid_opts = array_map(function ($long_opt) {
             return rtrim($long_opt, ':');
         }, $long_opts);
-
         if (!in_array($opt, $valid_opts)) {
-            fwrite(STDERR, "Error: Unrecognized option '--$opt'\n");
+            log_message("Error: Unrecognized option '--$opt'", VERBOSITY_QUIET, true);
             exit(1);
-        }   
+        }
     }
-    
+
+    // Handle --verbose and --quiet
+    if (isset($options['verbose']) && isset($options['quiet'])) {
+        log_message("Error: Cannot use both --verbose and --quiet options.", VERBOSITY_QUIET, true);
+        exit(1);
+    } elseif (isset($options['verbose'])) {
+        $verbosity = VERBOSITY_VERBOSE;
+    } elseif (isset($options['quiet'])) {
+        $verbosity = VERBOSITY_QUIET;
+    }
+
     // Handle --wtf
     if (isset($options['wtf'])) {
-        echo "¯\\_(ツ)_/¯\n";
+        log_message("¯\\_(ツ)_/¯", VERBOSITY_QUIET);
         exit(0);
     }
 
     // Handle --fml
     if (isset($options['fml'])) {
-        echo "🔥 This is fine 🔥\n";
+        log_message("🔥 This is fine 🔥", VERBOSITY_QUIET);
         exit(0);
     }
 
     // Handle --version
     if (isset($options['version'])) {
-        echo PROGRAM_NAME . " configure " . VERSION . "\n";
+        log_message(PROGRAM_NAME . " configure " . VERSION, VERBOSITY_QUIET);
         exit(0);
     }
 
     // Handle --help
     if (isset($options['help'])) {
-        echo "Usage: configure [options] [VAR=VALUE...]\n";
-        echo "This script generates two configuration files for the Bro Chat project:\n";
-        echo "  * config/config.php - is the main runtime configuration file.\n";
-        echo "  * config/build-config.php - is the configuration file used by the builder script.\n";
-        echo "\n";        
-        echo "This configuration script reads the configuration options from the command line\n";
-        echo "and environment variables, and it generates the config.php and build-config.php\n";
-        echo "files based on the provided values.\n";
-        echo "\n";
-        echo "The default values are specified in a config.php.in and build-config.php.in\n";
-        echo "template files which are processed by this script.\n";
-        echo "\n";
-        echo "It will search for the template files in the config directory,\n";
-        echo "and generate the config files in the build/config directory.\n";
-        echo "\n";
-        echo "You can change the default source and build directories using the \n";
-        echo "--srcdir and --builddir options.\n";
-        echo "\n";
-        echo "Options:\n";
-        echo "  --prefix=PREFIX        installation prefix directory [{$config['prefix']}]\n";
-        echo "  --datarootdir=EPREFIX  root of the directory tree for read-only\n";
-        echo "                         architecture-independent data files\n";
-        echo "  --datadir=DIR          directory for installing idiosyncratic read-only\n";
-        echo "                         architecture-independent data files for this program\n";
-        echo "  --localstatedir=DIR    directory for installing data files which the\n";
-        echo "                         programs modify while they run.\n";
-        echo "  --sysconfdir=DIR       directory for installing read-only configuration files\n";
-        echo "  --srcdir=DIR           source directory containing config/config.php.in [{$config['srcdir']}]\n";
-        echo "  --builddir=DIR         build directory for output config/config.php [{$config['builddir']}]\n";
-        echo "  --enable-development   enable development mode (HTTP, port 8080, no SSL)\n";
-        echo "  --enable-production    enable production mode (HTTPS, Port 443, SSL)\n";
-        echo "  --version              output version information and exit\n";
-        echo "  --help                 display this help and exit\n";
-        echo "  --wtf                  output shrug emoji and exit\n";
-        echo "  --fml                  output flame emojis with 'This is fine' and exit\n";
-        echo "\nEnvironment variables:\n";
-        echo "  VAR=VALUE              set configuration variables (e.g., PHP_VERSION=8.2, DOMAIN=example.com)\n";
-        echo "\n";
-        echo "The 'configure' script generates a 'config.status' shell script that can be run\n";
-        echo "to recreate the current configuration.\n";
-        echo "\n";
-        echo "Report bugs to <fixme@example.com>.\n";
+        $help_text = <<<EOT
+Usage: configure [options] [VAR=VALUE...]
+This script generates two configuration files for the Bro Chat project:
+  * config/config.php - is the main runtime configuration file.
+  * config/build-config.php - is the configuration file used by the builder script.
+
+This configuration script reads the configuration options from the command line
+and environment variables, and it generates the config.php and build-config.php
+files based on the provided values.
+
+The default values are specified in a config.php.in and build-config.php.in
+template files which are processed by this script.
+
+It will search for the template files in the config directory,
+and generate the config files in the build/config directory.
+
+You can change the default source and build directories using the
+--srcdir and --builddir options.
+
+Options:
+  --prefix=PREFIX        installation prefix directory [{$config['prefix']}]
+  --datarootdir=EPREFIX  root of the directory tree for read-only
+                         architecture-independent data files
+  --datadir=DIR          directory for installing idiosyncratic read-only
+                         architecture-independent data files for this program
+  --localstatedir=DIR    directory for installing data files which the
+                         programs modify while they run.
+  --sysconfdir=DIR       directory for installing read-only configuration files
+  --srcdir=DIR           source directory containing config/config.php.in [{$config['srcdir']}]
+  --builddir=DIR         build directory for output config/config.php [{$config['builddir']}]
+  --enable-development   enable development mode (HTTP, port 8080, no SSL)
+  --enable-production    enable production mode (HTTPS, Port 443, SSL)
+  --verbose              enable verbose output
+  --quiet                suppress non-error output
+  --version              output version information and exit
+  --help                 display this help and exit
+  --wtf                  output shrug emoji and exit
+  --fml                  output flame emojis with 'This is fine' and exit
+
+Environment variables:
+  VAR=VALUE              set configuration variables (e.g., PHP_VERSION=8.2, DOMAIN=example.com)
+
+The 'configure' script generates a 'config.status' shell script that can be run
+to recreate the current configuration.
+
+Report bugs to <fixme@example.com>.
+EOT;
+        log_message($help_text, VERBOSITY_QUIET);
         exit(0);
     }
 
@@ -137,14 +167,13 @@ function parse_arguments() {
     $config['BUILDDIR'] = $config['builddir'];
 
     if (isset($options['enable-development']) && isset($options['enable-production'])) {
-        fwrite(STDERR, "Error: Cannot enable both development and production modes at the same time.\n");
+        log_message("Error: Cannot enable both development and production modes at the same time.", VERBOSITY_QUIET, true);
         exit(1);
     } elseif (isset($options['enable-development'])) {
         $config['mode'] = 'DEVELOPMENT';
     } elseif (isset($options['enable-production'])) {
         $config['mode'] = 'PRODUCTION';
     }
-    // else use default mode
 
     // Parse VAR=VALUE arguments
     foreach ($argv as $arg) {
@@ -160,96 +189,119 @@ function parse_arguments() {
         }
     }
 
+    if ($verbosity >= VERBOSITY_VERBOSE) {
+        log_message("Parsed configuration values:", VERBOSITY_VERBOSE);
+        foreach ($config as $key => $value) {
+            log_message("  $key = $value", VERBOSITY_VERBOSE);
+        }
+    }
+
     return $argv; // Return original arguments for config.status
 }
 
 function validate_directories() {
-    global $config;
+    global $config, $verbosity;
+
+    log_message("Validating directories...", VERBOSITY_VERBOSE);
 
     // Normalize paths to absolute
     $config['srcdir'] = realpath($config['srcdir']) ?: $config['srcdir'];
     $config['builddir'] = realpath($config['builddir']) ?: $config['builddir'];
 
+    log_message("Source directory: {$config['srcdir']}", VERBOSITY_VERBOSE);
+    log_message("Build directory: {$config['builddir']}", VERBOSITY_VERBOSE);
+
     // Validate srcdir
     if (!is_dir($config['srcdir'])) {
-        fwrite(STDERR, "Error: Source directory '{$config['srcdir']}' does not exist.\n");
+        log_message("Error: Source directory '{$config['srcdir']}' does not exist.", VERBOSITY_QUIET, true);
         exit(1);
     }
     if (!is_readable($config['srcdir'])) {
-        fwrite(STDERR, "Error: Source directory '{$config['srcdir']}' is not readable.\n");
+        log_message("Error: Source directory '{$config['srcdir']}' is not readable.", VERBOSITY_QUIET, true);
         exit(1);
     }
 
     // Check if srcdir and builddir are the same
     if ($config['srcdir'] === $config['builddir']) {
-        fwrite(STDERR, "Error: Source directory and build directory cannot be the same.\n");
+        log_message("Error: Source directory and build directory cannot be the same.", VERBOSITY_QUIET, true);
         exit(1);
     }
 }
 
 function check_sqlite() {
-    global $config;
+    global $config, $verbosity;
+
+    log_message("Checking for sqlite3...", VERBOSITY_VERBOSE);
 
     $command = "sqlite3 -version 2>&1";
     exec($command, $output, $return_var);
     if ($return_var !== 0 || empty($output)) {
-        fwrite(STDERR, "Error: sqlite3 not found or not working.\n");
+        log_message("Error: sqlite3 not found or not working.", VERBOSITY_QUIET, true);
         exit(1);
     }
     $version_string = implode("\n", $output);
     if (preg_match('/^(\d+\.\d+\.\d+)/', $version_string, $matches)) {
         $config['sqlite_version'] = $matches[1];
+        log_message("Found sqlite3 version {$config['sqlite_version']}", VERBOSITY_VERBOSE);
     } else {
-        fwrite(STDERR, "Error: Could not determine sqlite3 version.\n");
+        log_message("Error: Could not determine sqlite3 version.", VERBOSITY_QUIET, true);
         exit(1);
     }
 }
 
 function check_nginx() {
-    global $config;
+    global $config, $verbosity;
+
+    log_message("Checking for nginx...", VERBOSITY_VERBOSE);
 
     $command = "nginx -v 2>&1";
     exec($command, $output, $return_var);
     if ($return_var !== 0 || empty($output)) {
-        fwrite(STDERR, "Error: nginx not found or not working.\n");
+        log_message("Error: nginx not found or not working.", VERBOSITY_QUIET, true);
         exit(1);
     }
     $version_string = implode("\n", $output);
     if (preg_match('/nginx\/(\d+\.\d+\.\d+)/', $version_string, $matches)) {
         $config['nginx_version'] = $matches[1];
+        log_message("Found nginx version {$config['nginx_version']}", VERBOSITY_VERBOSE);
     } else {
-        fwrite(STDERR, "Error: Could not determine nginx version.\n");
+        log_message("Error: Could not determine nginx version.", VERBOSITY_QUIET, true);
         exit(1);
     }
 }
 
 function find_highest_php_fpm_version() {
-    global $config;
+    global $config, $verbosity;
+
+    log_message("Searching for php-fpm...", VERBOSITY_VERBOSE);
 
     // Use specified PHP_VERSION if provided
     if (isset($config['php_version'])) {
         $php_fpm_bin = "php-fpm" . preg_replace('/^(\d+\.\d+).*/', '$1', $config['php_version']);
+        log_message("Checking specified php-fpm version: $php_fpm_bin", VERBOSITY_VERBOSE);
         $command = escapeshellcmd($php_fpm_bin) . " -v 2>&1";
         exec($command, $output, $return_var);
         if ($return_var !== 0 || empty($output)) {
-            fwrite(STDERR, "Error: $php_fpm_bin not found or not working.\n");
+            log_message("Error: $php_fpm_bin not found or not working.", VERBOSITY_QUIET, true);
             exit(1);
         }
         $version_string = implode("\n", $output);
         if (preg_match('/PHP\s+(\d+\.\d+\.\d+)/', $version_string, $matches)) {
             $config['php_fpm_version'] = $matches[1];
             $config['php_fpm'] = $php_fpm_bin;
+            log_message("Found $php_fpm_bin version {$config['php_fpm_version']}", VERBOSITY_VERBOSE);
             if ($matches[1] !== $config['php_version']) {
-                fwrite(STDERR, "Warning: Specified PHP_VERSION {$config['php_version']} does not match $php_fpm_bin version {$matches[1]}.\n");
+                log_message("Warning: Specified PHP_VERSION {$config['php_version']} does not match $php_fpm_bin version {$matches[1]}.", VERBOSITY_NORMAL, true);
             }
             return true;
         } else {
-            fwrite(STDERR, "Error: Could not determine $php_fpm_bin version.\n");
+            log_message("Error: Could not determine $php_fpm_bin version.", VERBOSITY_QUIET, true);
             exit(1);
         }
     }
 
     // Find highest php-fpm version
+    log_message("No PHP_VERSION specified, searching for highest php-fpm version...", VERBOSITY_VERBOSE);
     $php_fpm_bin = 'php-fpm';
     $possible_bins = [$php_fpm_bin];
 
@@ -267,12 +319,14 @@ function find_highest_php_fpm_version() {
         exec($command, $output, $return_var);
         if ($return_var === 0 && !empty($output)) {
             $bin_path = $output[0];
+            log_message("Found php-fpm binary: $bin_path", VERBOSITY_VERBOSE);
             $version_command = escapeshellcmd($bin_path) . " -v 2>&1";
             exec($version_command, $version_output, $version_return_var);
             if ($version_return_var === 0) {
                 $version_string = implode("\n", $version_output);
                 if (preg_match('/PHP\s+(\d+\.\d+\.\d+)/', $version_string, $matches)) {
                     $version = $matches[1];
+                    log_message("Detected version $version for $bin_name", VERBOSITY_VERBOSE);
                     if ($highest_version === null || version_compare($version, $highest_version, '>')) {
                         $highest_version = $version;
                         $selected_bin = $bin_name;
@@ -286,22 +340,27 @@ function find_highest_php_fpm_version() {
     if ($selected_bin && $highest_version) {
         $config['php_fpm'] = $selected_bin;
         $config['php_fpm_version'] = $highest_version;
+        log_message("Selected $selected_bin (version $highest_version)", VERBOSITY_VERBOSE);
         return true;
     } else {
-        fwrite(STDERR, "Error: No php-fpm binary found in PATH.\n");
+        log_message("Error: No php-fpm binary found in PATH.", VERBOSITY_QUIET, true);
         exit(1);
     }
 }
 
 function substitute_template($input_file, $output_file, $config) {
+    global $verbosity;
+
+    log_message("Processing template: $input_file -> $output_file", VERBOSITY_VERBOSE);
+
     // Read input file
     if (!file_exists($input_file)) {
-        fwrite(STDERR, "Error: {$input_file} not found.\n");
+        log_message("Error: {$input_file} not found.", VERBOSITY_QUIET, true);
         exit(1);
     }
     $content = @file_get_contents($input_file);
     if ($content === false) {
-        fwrite(STDERR, "Error: Failed to read {$input_file}.\n");
+        log_message("Error: Failed to read {$input_file}.", VERBOSITY_QUIET, true);
         exit(1);
     }
 
@@ -317,33 +376,30 @@ function substitute_template($input_file, $output_file, $config) {
         return $value;
     }, $content);
 
-// Replace defined constants
-$content = preg_replace_callback(
-    "/define\\('([A-Za-z_]+)',\\s*([^)]+)\\);/",
-    function ($matches) use ($config) {
-        $constantName = $matches[1]; // e.g., SRCDIR
-        $key = $constantName; // e.g., SRCDIR
-        $lowercaseKey = strtolower($constantName); // e.g., srcdir
+    // Replace defined constants
+    $content = preg_replace_callback(
+        "/define\\('([A-Za-z_]+)',\\s*([^)]+)\\);/",
+        function ($matches) use ($config) {
+            $constantName = $matches[1];
+            $key = $constantName;
+            $lowercaseKey = strtolower($constantName);
+            $newValue = $config[$key] ?? $config[$lowercaseKey] ?? null;
 
-        // Retrieve value from config (case-sensitive & case-insensitive)
-        $newValue = $config[$key] ?? $config[$lowercaseKey] ?? null;
-
-        if (isset($newValue)) {
-            // Check if it's a valid integer or numeric string
-            if (is_int($newValue) || (is_string($newValue) && ctype_digit($newValue))) {
-                return "define('{$constantName}', {$newValue});"; // Unquoted numeric
-            } elseif (is_string($newValue)) {
-                return "define('{$constantName}', '" . addslashes($newValue) . "');"; // Quoted string
+            if (isset($newValue)) {
+                if (is_int($newValue) || (is_string($newValue) && ctype_digit($newValue))) {
+                    return "define('{$constantName}', {$newValue});";
+                } elseif (is_string($newValue)) {
+                    return "define('{$constantName}', '" . addslashes($newValue) . "');";
+                } else {
+                    trigger_error("WARNING: '{$constantName}' should be an integer or string, but got invalid value: " . var_export($newValue, true), E_USER_WARNING);
+                    return $matches[0];
+                }
             } else {
-                trigger_error("WARNING: '{$constantName}' should be an integer or string, but got invalid value: " . var_export($newValue, true), E_USER_WARNING);
-                return $matches[0]; // Keep original if substitution fails
+                return $matches[0];
             }
-        } else {
-            return $matches[0]; // No replacement found, keep original
-        }
-    },
-    $content
-);
+        },
+        $content
+    );
 
     // Add header
     $header = "<?php\n";
@@ -354,21 +410,25 @@ $content = preg_replace_callback(
 
     // Write to output file
     if (@file_put_contents($output_file, $content) === false) {
-        fwrite(STDERR, "Error: Failed to write {$output_file}.\n");
+        log_message("Error: Failed to write {$output_file}.", VERBOSITY_QUIET, true);
         exit(1);
     }
+
+    log_message("Successfully generated $output_file", VERBOSITY_VERBOSE);
 }
 
 function generate_config_status($argv) {
+    global $verbosity;
+
+    log_message("Generating config.status...", VERBOSITY_VERBOSE);
+
     $content = "#!/bin/sh\n";
     $content .= "# Generated by " . PROGRAM_NAME . " (version " . VERSION . ")\n";
     $content .= "# Run this to recreate the current configuration\n\n";
 
-    // Reconstruct command with quoted arguments
     $script_name = './' . basename($argv[0]);
-    array_shift($argv); // Remove script name
+    array_shift($argv);
     $quoted_args = array_map(function ($arg) {
-        // Quote arguments containing spaces or special characters
         if (preg_match('/[\s|&;<>()$`\\"\']/', $arg)) {
             return '"' . str_replace('"', '\"', $arg) . '"';
         }
@@ -377,16 +437,19 @@ function generate_config_status($argv) {
     $command = $script_name . ' ' . implode(' ', $quoted_args);
     $content .= "exec $command\n";
 
-    // Write config.status
     if (@file_put_contents('config.status', $content) === false) {
-        fwrite(STDERR, "Error: Failed to write config.status.\n");
+        log_message("Error: Failed to write config.status.", VERBOSITY_QUIET, true);
         exit(1);
     }
-    chmod('config.status', 0755) or fwrite(STDERR, "Warning: Could not make config.status executable.\n");
+    chmod('config.status', 0755) or log_message("Warning: Could not make config.status executable.", VERBOSITY_NORMAL, true);
+
+    log_message("Successfully generated config.status", VERBOSITY_VERBOSE);
 }
 
 function main() {
-    global $config, $argv;
+    global $config, $argv, $verbosity;
+
+    log_message("Starting configuration process...", VERBOSITY_VERBOSE);
 
     // Step 1: Process command-line arguments and environment variables
     $original_argv = parse_arguments();
@@ -402,13 +465,15 @@ function main() {
     // Set PHP_VERSION to PHP_FPM_VERSION if not provided
     if (!isset($config['php_version'])) {
         $config['php_version'] = $config['php_fpm_version'];
+        log_message("Set PHP_VERSION to {$config['php_fpm_version']}", VERBOSITY_VERBOSE);
     }
 
     // Step 4: Generate config.php from config.php.in
     $input_file = rtrim($config['srcdir'], '/') . '/config/config.php.in';
     $output_file = rtrim($config['builddir'], '/') . '/config/config.php';
     if (!is_dir(dirname($output_file))) {
-        mkdir(dirname($output_file), 0755, true) or die("Error: Cannot create directory for $output_file\n");
+        log_message("Creating directory for $output_file", VERBOSITY_VERBOSE);
+        mkdir(dirname($output_file), 0755, true) or log_message("Error: Cannot create directory for $output_file", VERBOSITY_QUIET, true);
     }
     substitute_template($input_file, $output_file, $config);
     $build_input_file = rtrim($config['srcdir'], '/') . '/config/build-config.php.in';
@@ -418,10 +483,11 @@ function main() {
     // Step 5: Generate config.status
     generate_config_status($original_argv);
 
-    echo "Configuration complete. Run './builder --build' to build.\n";
-    echo "Using php-fpm: {$config['php_fpm']} (version {$config['php_fpm_version']})\n";
-    echo "Using nginx: version {$config['nginx_version']}\n";
-    echo "Using sqlite3: version {$config['sqlite_version']}\n";
+    // Final output
+    log_message("Configuration complete. Run './builder --build' to build.", VERBOSITY_NORMAL);
+    log_message("Using php-fpm: {$config['php_fpm']} (version {$config['php_fpm_version']})", VERBOSITY_NORMAL);
+    log_message("Using nginx: version {$config['nginx_version']}", VERBOSITY_NORMAL);
+    log_message("Using sqlite3: version {$config['sqlite_version']}", VERBOSITY_NORMAL);
 }
 
 main();
