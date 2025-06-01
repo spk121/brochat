@@ -8,10 +8,6 @@ const PROGRAM_NAME = 'configure';
 // Default configuration values
 $config = [
     'prefix' => '/usr/local',
-    'datarootdir' => '',
-    'datadir' => '',
-    'localstatedir' => '',
-    'sysconfdir' => '',
     'php_fpm' => 'php-fpm',
     'php_fpm_version' => '',
     'nginx_version' => '',
@@ -28,12 +24,34 @@ function parse_arguments() {
     // Parse GNU-standard long options
     $short_opts = '';
     $long_opts = [
-        'prefix:', 'exec-prefix:', 'bindir:', 'libdir:', 'includedir:',
+        'prefix:', 'datarootdir:', 'datadir:', 'localstatedir:', 'sysconfdir:',
         'srcdir:', 'builddir:',
         'version', 'help', 'wtf', 'fml'
     ];
     $options = getopt($short_opts, $long_opts);
 
+    // Extract all long options from $argv
+    $provided_long_opts = [];
+    global $argv;
+    foreach ($argv as $arg) {
+        if (preg_match('/^--([a-zA-Z0-9-]+)(?:=.*)?$/', $arg, $matches)) {
+            $provided_long_opts[] = $matches[1];
+        }
+    }
+
+    // Check for unrecognized long options
+    foreach ($provided_long_opts as $opt) {
+        // Remove trailing ':' from $long_opts for comparison
+        $valid_opts = array_map(function ($long_opt) {
+            return rtrim($long_opt, ':');
+        }, $long_opts);
+
+        if (!in_array($opt, $valid_opts)) {
+            fwrite(STDERR, "Error: Unrecognized option '--$opt'\n");
+            exit(1);
+        }   
+    }
+    
     // Handle --wtf
     if (isset($options['wtf'])) {
         echo "¯\\_(ツ)_/¯\n";
@@ -101,12 +119,23 @@ function parse_arguments() {
 
     // Update config with GNU options
     $config['prefix'] = $options['prefix'] ?? $config['prefix'];
-    $config['exec_prefix'] = $options['exec-prefix'] ?? $config['exec_prefix'];
-    $config['bindir'] = $options['bindir'] ?? $config['bindir'];
-    $config['libdir'] = $options['libdir'] ?? $config['libdir'];
-    $config['includedir'] = $options['includedir'] ?? $config['includedir'];
+    if (isset($options['datarootdir'])) {
+        $config['datarootdir'] = $options['datarootdir'];
+    }
+    if (isset($options['datadir'])) {
+        $config['datadir'] = $options['datadir'];
+    }
+    if (isset($options['localstatedir'])) {
+        $config['localstatedir'] = $options['localstatedir'];
+    }
+    if (isset($options['sysconfdir'])) {
+        $config['sysconfdir'] = $options['sysconfdir'];
+    }
     $config['srcdir'] = $options['srcdir'] ?? $config['srcdir'];
     $config['builddir'] = $options['builddir'] ?? $config['builddir'];
+    $config['SRCDIR'] = $config['srcdir'];
+    $config['BUILDDIR'] = $config['builddir'];
+
     if (isset($options['enable-development']) && isset($options['enable-production'])) {
         fwrite(STDERR, "Error: Cannot enable both development and production modes at the same time.\n");
         exit(1);
@@ -288,14 +317,33 @@ function substitute_template($input_file, $output_file, $config) {
         return $value;
     }, $content);
 
-    // Replace defined constants
-    $content = preg_replace_callback('/define\(\'([A-Z_]+)\',/', function ($matches) use ($config) {
-        $key = strtolower($matches[1]);
-        if (isset($config[$key])) {
-            return "define('{$matches[1]}',";
+// Replace defined constants
+$content = preg_replace_callback(
+    "/define\\('([A-Za-z_]+)',\\s*([^)]+)\\);/",
+    function ($matches) use ($config) {
+        $constantName = $matches[1]; // e.g., SRCDIR
+        $key = $constantName; // e.g., SRCDIR
+        $lowercaseKey = strtolower($constantName); // e.g., srcdir
+
+        // Retrieve value from config (case-sensitive & case-insensitive)
+        $newValue = $config[$key] ?? $config[$lowercaseKey] ?? null;
+
+        if (isset($newValue)) {
+            // Check if it's a valid integer or numeric string
+            if (is_int($newValue) || (is_string($newValue) && ctype_digit($newValue))) {
+                return "define('{$constantName}', {$newValue});"; // Unquoted numeric
+            } elseif (is_string($newValue)) {
+                return "define('{$constantName}', '" . addslashes($newValue) . "');"; // Quoted string
+            } else {
+                trigger_error("WARNING: '{$constantName}' should be an integer or string, but got invalid value: " . var_export($newValue, true), E_USER_WARNING);
+                return $matches[0]; // Keep original if substitution fails
+            }
+        } else {
+            return $matches[0]; // No replacement found, keep original
         }
-        return $matches[0];
-    }, $content);
+    },
+    $content
+);
 
     // Add header
     $header = "<?php\n";
@@ -377,3 +425,5 @@ function main() {
 }
 
 main();
+
+?>
