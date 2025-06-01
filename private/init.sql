@@ -29,7 +29,7 @@ CREATE TABLE banned_ips (
 
 CREATE TABLE invitation_codes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT NOT NULL UNIQUE CHECK (code REGEXP '^[a-z]{3}[0-9]{3}$'),
+    code TEXT NOT NULL UNIQUE,
     expiration_date INTEGER NOT NULL,
     usage_count INTEGER NOT NULL DEFAULT 0,
     max_uses INTEGER NOT NULL DEFAULT 5

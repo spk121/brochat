@@ -135,7 +135,7 @@ function parse_arguments() {
         echo "  --fml                  output flame emojis with 'This is fine' and exit\n";
 
         echo "\nEnvironment variables:\n";
-        echo "  VAR=VALUE              set configuration variables (e.g., PHP_VERSION=8.2, DOMAIN=example.com)\n";
+        echo "  VAR=VALUE              set configuration variables (e.g., PHP_EFFECTIVE_VERSION=8.2, DOMAIN=example.com)\n";
 
         echo "\nThe 'configure' script generates a 'config.status' shell script that can be run\n";
         echo "to recreate the current configuration.\n";
@@ -262,9 +262,9 @@ function find_highest_php_fpm_version() {
 
     log_message("Searching for php-fpm...", VERBOSITY_VERBOSE);
 
-    // Use specified PHP_VERSION if provided
-    if (isset($config['php_version'])) {
-        $php_fpm_bin = "php-fpm" . preg_replace('/^(\d+\.\d+).*/', '$1', $config['php_version']);
+    // Use specified PHP_EFFECTIVE_VERSION if provided
+    if (isset($config['php_effective_version'])) {
+        $php_fpm_bin = "php-fpm" . preg_replace('/^(\d+\.\d+).*/', '$1', $config['php_effective_version']);
         log_message("Checking specified php-fpm version: $php_fpm_bin", VERBOSITY_VERBOSE);
         $command = escapeshellcmd($php_fpm_bin) . " -v 2>&1";
         exec($command, $output, $return_var);
@@ -277,8 +277,8 @@ function find_highest_php_fpm_version() {
             $config['php_fpm_version'] = $matches[1];
             $config['php_fpm'] = $php_fpm_bin;
             log_message("Found $php_fpm_bin version {$config['php_fpm_version']}", VERBOSITY_VERBOSE);
-            if ($matches[1] !== $config['php_version']) {
-                log_message("Warning: Specified PHP_VERSION {$config['php_version']} does not match $php_fpm_bin version {$matches[1]}.", VERBOSITY_NORMAL, true);
+            if ($matches[1] !== $config['php_effective_version']) {
+                log_message("Warning: Specified PHP_EFFECTIVE_VERSION {$config['php_effective_version']} does not match $php_fpm_bin version {$matches[1]}.", VERBOSITY_NORMAL, true);
             }
             return true;
         } else {
@@ -288,7 +288,7 @@ function find_highest_php_fpm_version() {
     }
 
     // Find highest php-fpm version
-    log_message("No PHP_VERSION specified, searching for highest php-fpm version...", VERBOSITY_VERBOSE);
+    log_message("No PHP_EFFECTIVE_VERSION specified, searching for highest php-fpm version...", VERBOSITY_VERBOSE);
     $php_fpm_bin = 'php-fpm';
     $possible_bins = [$php_fpm_bin];
 
@@ -469,10 +469,10 @@ function main() {
     check_nginx();
     find_highest_php_fpm_version();
 
-    // Set PHP_VERSION to PHP_FPM_VERSION if not provided
-    if (!isset($config['php_version'])) {
-        $config['php_version'] = preg_replace('/^(\d+\.\d+).*/', '$1', $config['php_fpm_version']);
-        log_message("Set PHP_VERSION to {$config['php_version']}", VERBOSITY_VERBOSE);
+    // Set PHP_EFFECTIVE_VERSION to PHP_FPM_VERSION if not provided
+    if (!isset($config['php_effective_version'])) {
+        $config['php_effective_version'] = preg_replace('/^(\d+\.\d+).*/', '$1', $config['php_fpm_version']);
+        log_message("Set PHP_EFFECTIVE_VERSION to {$config['php_effective_version']}", VERBOSITY_VERBOSE);
     }
 
     // Step 4: Generate config.php from config.php.in

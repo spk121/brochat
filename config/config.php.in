@@ -2,14 +2,14 @@
 # Configuration file for BroChat web application
 
 # Development or Production Mode
-define('MODE', 'DEVELOPMENT');
+define('MODE', '@mode@');
 
 # When non-zero, this will enable HTTPS for the development server.
 # By default, the development server runs only HTTP port 8080 with no HTTPS.
 define('DEVEL_HTTPS_ENABLED', 0);
 
 # Website Domain Name
-define('DOMAIN', 'yourdomain.com');
+define('DOMAIN', '@domain@');
 
 # HTTP and HTTPS Ports 
 define('DEVEL_HTTP_PORT', 8080);
@@ -32,47 +32,53 @@ define('SSL_KEY_FILE_PRODUCTION', SSL_PRIVATEDIR . '/' . DOMAIN . '.key');
 define('WEBSOCKET_HOST', 'localhost');
 define('WEBSOCKET_PORT', 4567);
 
-# Nginx directories
+# Nginx
 define('NGINX_CONF_DIR', '/etc/nginx');
 define('NGINX_SITES_AVAILABLE_DIR', NGINX_CONF_DIR . '/sites-available');
 define('NGINX_SITES_ENABLED_DIR', NGINX_CONF_DIR . '/sites-enabled');
+# Nginx configuration file
+define('NGINX_CONF_FILE', NGINX_SITES_AVAILABLE_DIR . '/brochat.conf');
 # Nginx webroot
 define('NGINX_WEBROOT', '/var/www/html');
 # Nginx log directory
 define('NGINX_LOG_DIR', '/var/log/nginx');
+define('NGINX_USER', 'www-data');
+define('NGINX_GROUP', 'www-data');
 
 # PHP directories
-define('PHP_VERSION', '8.3');
+define('PHP_EFFECTIVE_VERSION', '@php_effective_version@');
 # PHP-FPM socket
-define('PHP_FPM_SOCK', '/run/php/php' . PHP_VERSION . '-fpm.sock');
+define('PHP_FPM_SOCK', '@php_fpm_sock@');
 # PHP-FPM configuration
-define('PHP_FPM_CONF_DIR', '/etc/php/' . PHP_VERSION . '/fpm');
+define('PHP_FPM_CONF_DIR', '/etc/php/@php_effective_version@/fpm');
 # PHP-FPM log directory
 define('PHP_FPM_LOG_DIR', '/var/log/php-fpm');
 # PHP-FPM configuration file
 define('PHP_FPM_CONF_FILE', PHP_FPM_CONF_DIR . '/php-fpm.conf');
+define('PHP_FPM_USER', 'www-data');
+define('PHP_FPM_GROUP', 'www-data');
 
 # Project installation directories
 # First, define the GNU Coding Standards directories
-define('prefix', '/usr/local');
-define('datarootdir', prefix . '/share');
-define('datadir', datarootdir);
-define('localstatedir', prefix . '/var');
-define('sysconfdir', prefix . '/etc');
-define('pkgdatadir', datadir . '/brochat');
-define('pkglocalstatedir', localstatedir . '/brochat');
-define('pkgsysconfdir', sysconfdir . '/brochat');
+define('prefix', '@prefix@');
+define('datarootdir', '@datarootdir@');
+define('datadir', '@datadir@');
+define('localstatedir', '@localstatedir@');
+define('sysconfdir', '@sysconfdir@');
+define('pkgdatadir', '@pkgdatadir@');
+define('pkglocalstatedir', '@pkglocalstatedir@');
+define('pkgsysconfdir', '@pkgsysconfdir@');
 # Then, define the Bro Chat directories
-define('PUBLIC_DIR', pkgdatadir . '/public');
-define('PRIVATE_DIR', pkgdatadir . '/private');
-define('DB_DIR', pkglocalstatedir . '/db');
-define('LOG_DIR', pkglocalstatedir . '/logs');
-define('NOTES_DIR', pkglocalstatedir . '/notes');
-define('SNAPS_DIR', pkglocalstatedir . '/snaps');
-define('SNAPS_PREVIEWS_DIR', SNAPS_DIR . '/previews');
-define('CONFIG_DIR', pkgsysconfdir);
+define('PUBLIC_DIR', '@public_dir@');
+define('PRIVATE_DIR', '@private_dir@');
+define('DB_DIR', '@db_dir@');
+define('LOG_DIR', '@log_dir@');
+define('NOTES_DIR', '@notes_dir@');
+define('SNAPS_DIR', '@snaps_dir@');
+define('SNAPS_PREVIEWS_DIR', '@snaps_previews_dir@');
+define('CONFIG_DIR', '@config_dir@');
 # And some special files
 define('CONFIG_FILE', CONFIG_DIR . '/config.php');
 define('DB_FILE', DB_DIR . '/brochat.db');
-// define('DB_DSN', 'sqlite:' . __DIR__ . '/../data/brochat.db');
+define('DB_DSN', 'sqlite:' . DB_FILE);
 ?>
