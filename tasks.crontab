@@ -1,1 +1,0 @@
-0 0 * * * /usr/bin/php /var/www/html/cleanup.php >> /var/log/chat-site-cron.log 2>&1
