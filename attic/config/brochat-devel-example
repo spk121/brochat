@@ -1,0 +1,57 @@
+##
+# This is an example default server configuration for development
+# as required by Bro Chat.  This has no encryption, so do not use
+# it in production.
+#
+server {
+	listen 80 default_server;
+	listen [::]:80 default_server;
+
+    root /var/www/html;
+
+    # The files to be checked when given no explicit path.
+    index index.html index.htm index.php;
+
+    server_name _;
+
+	location / {
+		# First attempt to serve request as file, then
+		# as directory, then fall back to displaying a 404.
+		try_files $uri $uri/ =404;
+	}
+
+	# pass PHP scripts to FastCGI server
+	#
+	location ~ \.php$ {
+		include snippets/fastcgi-php.conf;
+	
+		# With php-fpm:
+        # N.B. This Unix socket location has to match the
+        # one given in the PHP FPM configuration file. On
+        # Ubuntu, search for it at 
+        # /etc/php/8.3/fpm/pool.d/www.conf
+		fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+
+		# Without php-fpm or when using php-cgi (or other tcp sockets) instead,
+        # you'll need to use a TCP socket.
+		# fastcgi_pass 127.0.0.1:9000;
+	}    
+
+    # Future WebSocket proxy (placeholder)
+    location /ws {
+        proxy_pass http://localhost:8080; # WebSocket server address
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
+    }
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header X-Content-Type-Options "nosniff";
+
+    # Logging
+    access_log /var/log/nginx/chat-site.access.log;
+    error_log /var/log/nginx/chat-site.error.log;
+}

@@ -482,17 +482,49 @@ function build($src_dir, $build_dir) {
     }
     log_message("Database creation complete!");
 
-    copy_files_by_extension($src_dir . '/private', $build_dir . '/private', ['php', 'sql'], CopyOptions::OVERWRITE);
     copy_files_by_extension($src_dir . '/public', $build_dir . '/public', ['php', 'css', 'js', 'html', 'png', 'jpg', 'ico', 'jpeg', 'gif'], CopyOptions::OVERWRITE);
+    // Create a bootstrap file that holds the main paths for the installed application.
+    log_message("Creating build-directory bootstrap file in " . $build_dir . '/public', VERBOSITY_VERBOSE);
+    $bootstrap_file = $build_dir . '/public/bootstrap.php';
+    $bootstrap_public_dir = $build_dir . '/public';
+    $bootstrap_private_dir = $build_dir . '/private';
+    $bootstrap_config_dir = $build_dir . '/config';
+    $bootstrap_content = <<<EOT
+<?php
+// Bootstrap file contains the build directory paths.
+// This file is just used to test the build using the
+// command-line version of PHP.
+if (!defined('BOOTSTRAP')) {
+    http_response_code(403);
+    header('Content-Type: text/plain; charset=CP437');
+    echo "Direct access not allowed.\n";
+    exit(2);
+}
+define('ABS_PUBLIC_DIR', '$bootstrap_public_dir');
+define('ABS_PRIVATE_DIR', '$bootstrap_private_dir');
+define('ABS_CONFIG_DIR', '$bootstrap_config_dir');
+define('ABS_MAGIC_UUID', '53f9e544-3f34-11f0-9397-00155d8eea3b');
+?>
+EOT;
+    file_put_contents($bootstrap_file, $bootstrap_content);
+    copy_files_by_extension($src_dir . '/private', $build_dir . '/private', ['php', 'sql'], CopyOptions::OVERWRITE);
     copy_files_by_extension($src_dir . '/config', $build_dir . '/config', ['php'], CopyOptions::OVERWRITE);
     log_message("Build complete.");
 }
 
 function clean($src_dir, $build_dir) {
     log_message("Cleaning build artifacts...");
-    remove_files_by_extension($src_dir . '/private', $build_dir . '/private', ['php', 'sql'], true);
     remove_files_by_extension($src_dir . '/public', $build_dir . '/public', ['php', 'css', 'js', 'html', 'png', 'jpg', 'ico', 'jpeg', 'gif'], true);
+    remove_files_by_extension($src_dir . '/private', $build_dir . '/private', ['php', 'sql'], true);
     remove_files_by_extension($src_dir . '/config', $build_dir . '/config', ['php'], true);
+    $bootstrap_file = $build_dir . '/public/bootstrap.php';
+    if (file_exists($bootstrap_file)) {
+        if (unlink($bootstrap_file)) {
+            log_message("Removed build-directory bootstrap file: $bootstrap_file", VERBOSITY_VERBOSE);
+        } else {
+            log_message("Warning: Cannot remove " . bootstrap_file, VERBOSITY_NORMAL, true);
+        }
+    }
     $db_path = '$build_dir/db/' . basename(DB_FILE);
     if (file_exists($db_path)) {
         unlink($db_path) or log_message("Warning: Cannot remove " . DB_FILE, VERBOSITY_NORMAL, true);
@@ -515,12 +547,12 @@ function nginx_http_to_https_upgrade_block($http_port, $https_port, $domain) {
     // variables in the heredoc string below.
     return <<<EOT
 # Redirect HTTP to HTTPS
-server \{
+server {
     listen $http_port;
     listen [::]:$http_port;
     server_name $domain www.$domain;
     return 301 https://\$server_name$https_port_string\$request_uri;
-\}
+}
 EOT;
 }
 
@@ -536,6 +568,35 @@ function install($build_dir) {
         exit(1);
     }
     copy_files_by_extension($build_dir . '/public', PUBLIC_DIR, ['php', 'css', 'js', 'html', 'png', 'jpg', 'ico', 'jpeg', 'gif'], CopyOptions::OVERWRITE);
+    // Create a bootstrap file that holds the main paths for the installed application.
+    log_message("Creating bootstrap file in " . PUBLIC_DIR, VERBOSITY_VERBOSE);
+    $bootstrap_file = PUBLIC_DIR . '/bootstrap.php';
+    $bootstrap_public_dir = PUBLIC_DIR;
+    $bootstrap_private_dir = PRIVATE_DIR;
+    $bootstrap_config_dir = CONFIG_DIR;
+    $bootstrap_content = <<<EOT
+<?php
+// Bootstrap file contains the installation paths and UUID for the application.
+// Each PHP script should
+// - define BOOTSTRAP before including this file
+// - include this file to access the path constants
+// After that the application can include php scripts
+//   via `require_once PRIVATE_DIR . '/some_script.php'`
+//   or `require_once CONFIG_DIR . '/config.php'`
+if (!defined('BOOTSTRAP')) {
+    http_response_code(403);
+    header('Content-Type: text/plain; charset=CP437');
+    echo "Direct access not allowed.\n";
+    exit(2);
+}
+define('ABS_PUBLIC_DIR', '$bootstrap_public_dir');
+define('ABS_PRIVATE_DIR', '$bootstrap_private_dir');
+define('ABS_CONFIG_DIR', '$bootstrap_config_dir');
+define('ABS_MAGIC_UUID', 'c90ef91c-3f22-11f0-b5e4-00155d8eea3b');
+?>
+EOT;
+    file_put_contents($bootstrap_file, $bootstrap_content);
+    log_message("Created bootstrap file at $bootstrap_file", VERBOSITY_VERBOSE);
     set_directory_permissions(PUBLIC_DIR, NGINX_USER, NGINX_GROUP, '0755', '0644');
 
     if (!ensure_writable_directory(PRIVATE_DIR)) {
@@ -650,9 +711,9 @@ server {
         $main_port = DEVEL_HTTP_PORT;
         $server_name = 'localhost';
     }
+    $config_body = '';
     $config_body .= <<<EOT
-# BroChat Nginx configuration
-server {
+
     listen $main_port;
     listen [::]:$main_port;
     server_name $server_name;
@@ -661,10 +722,13 @@ EOT;
     ////////////////////
     // SSL configuration and security headers
     if (MODE === 'PRODUCTION') {
+        $cert = SSL_CERT_FILE_PRODUCTION;
+        $key = SSL_KEY_FILE_PRODUCTION;
+
         $config_body .= <<<EOT
     # SSL configuration for production
-    ssl_certificate {SSL_CERT_FILE_PRODUCTION};
-    ssl_certificate_key {SSL_KEY_FILE_PRODUCTION};
+    ssl_certificate $cert;
+    ssl_certificate_key $key;
 
     # Security Headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -676,10 +740,14 @@ EOT;
 
 EOT;
     } elseif (MODE === 'DEVELOPMENT' && DEVEL_HTTPS_ENABLED) {
+        $cert = SSL_CERT_FILE_DEVEL;
+        $key = SSL_KEY_FILE_DEVEL;
+
         $config_body .= <<<EOT
+
     # SSL configuration for development
-    ssl_certificate {SSL_CERT_FILE_DEVEL};
-    ssl_certificate_key {SSL_KEY_FILE_DEVEL};
+    ssl_certificate $cert;
+    ssl_certificate_key $key;
 
     # Basic security headers
     add_header X-Frame-Options "SAMEORIGIN";
@@ -688,6 +756,7 @@ EOT;
 EOT;
     } else {
         $config_body .= <<<EOT
+
     # Basic security headers
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
@@ -697,21 +766,22 @@ EOT;
 
     ////////////////////
     // Root Directory and Index Files
-    $config_body .= <<<EOT
+    {
+        $public_dir = PUBLIC_DIR;
+        $config_body .= <<<EOT
+
     # Root directory for the project
-    root {PUBLIC_DIR};
+    root $public_dir;
     index index.php index.html;
-	location / \{
-		# First attempt to serve request as file, then
-		# as directory, then fall back to displaying a 404.
-		try_files \$uri \$uri/ =404;
-	\}
+
 EOT;
+    }
 
     ////////////////////
     // Caching and debugging headers
     if (MODE === 'DEVELOPMENT') {
         $config_body .= <<<EOT
+
     # Disable caching for development
     add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
     add_header Pragma "no-cache";
@@ -724,64 +794,74 @@ EOT;
 
     /////////////////////
     // PHP Configuration
-    $config_body .= <<<EOT
- 	location / \{
-		# First attempt to serve request as file, then
-		# as directory, then fall back to displaying a 404.
-		try_files \$uri \$uri/ =404;
-	\}
+    {
+        $sock = PHP_FPM_SOCK;
+        $config_body .= <<<EOT
 
+    # Deny direct access to bootstrap.php
+    # Does a case-sensitive match for the exact file name.
+    location = /bootstrap.php {
+        deny all;
+        return 403; # Forbidden
+    }
+        
     # Pass PHP scripts to FastCGI server
-    location ~ ^/public/.*\\.php$ \{
+    # Does a case-sensitive match for files ending with .php.
+    location ~ \\.php$ {
         include snippets/fastcgi-php.conf;
         include fastcgi_params;
-        fastcgi_pass unix:{PHP_FPM_SOCK};
-        fastcgi_index index.php;
+        fastcgi_pass unix:{$sock};
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        try_files \$fastcgi_script_name =404;
-    \}
-EOT;
+    }
 
-    /////////////////////
-    // Private Directory
-    if (MODE === 'DEVELOPMENT') {
-        $config_body .= <<<EOT
-    # Allow browsing private files for debugging
-    Location /private/ \{
-        root {PRIVATE_DIR};
-        autoindex on;
-    \}
-EOT;
-    } else {
-        $config_body .= <<<EOT
-    # Private directory should not be accessible in production
-    Location /private/ \{
-        deny all;
-        return 404;
-    \}
+    # Deny direct access to private and config directories
+    # Does a case-sensitive match for URLs that begin with /private/ or /config/.
+    # FIXME: this is probably not needed, as the PHP scripts are
+    # not in the webroot.
+    # location ~ ^/(private|config)/ {
+    #     deny all;
+    #     return 403;
+    # }
+
+    location / {
+        # First attempt to serve request as file, then
+        # as directory, then fall back to displaying a 404.
+        try_files \$uri \$uri/ =404;
+    }
+
+
 EOT;
     }
 
     /////////////////////
     // Websocket Proxy and Logging
-    $config_body .= <<<EOT
+    {
+        $host = WEBSOCKET_HOST;
+        $port = WEBSOCKET_PORT;
+        $logdir = LOG_DIR;
+        $config_body .= <<<EOT
+
     # WebSocket is always local to the server.
-    Location /ws/ \{
-        proxy_pass http://{WEBSOCKET_HOST}:{WEBSOCKET_PORT};
+    location /ws/ {
+        proxy_pass http://{$host}:{$port};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "Upgrade";
-    \}
+    }
 
     # Logging
-    access_log {LOG_DIR}/access.log;
-    error_log {LOG_DIR}/error.log;
+    access_log {$logdir}/access.log;
+    error_log {$logdir}/error.log;
+
 EOT;
+    }
 
     $config_text .= <<<EOT
+
 server {
-    {$config_body}
+{$config_body}
 }
+
 EOT;
 
     if (file_exists($nginx_conf)) {
@@ -809,7 +889,15 @@ EOT;
 
 function uninstall($build_dir) {
     log_message("Uninstalling...");
-    remove_files_by_extension($build_dir . '/public', NGINX_WEBROOT, ['php', 'css', 'js', 'html', 'png', 'jpg', 'ico', 'jpeg', 'gif'], true);
+    remove_files_by_extension($build_dir . '/public', PUBLIC_DIR, ['php', 'css', 'js', 'html', 'png', 'jpg', 'ico', 'jpeg', 'gif'], true);
+    $bootstrap_file = PUBLIC_DIR . '/bootstrap.php';
+    if (file_exists($bootstrap_file)) {
+        if (unlink($bootstrap_file)) {
+            log_message("Removed bootstrap file $bootstrap_file", VERBOSITY_VERBOSE);
+        } else {
+            log_message("Cannot remove $bootstrap_file", VERBOSITY_NORMAL);
+        }
+    }
     remove_files_by_extension($build_dir . '/private', PRIVATE_DIR, ['php'], true);
     remove_files_by_extension($build_dir . '/config', CONFIG_DIR, ['php'], true);
 

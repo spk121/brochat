@@ -2,9 +2,9 @@
 // auth.php
 session_start();
 
-require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/constants.php';
-require_once __DIR__ . '/csrf.php'; // Ensure CSRF functions are available
+require_once ABS_CONFIG_DIR . '/config.php';
+require_once ABS_PRIVATE_DIR . '/constants.php';
+require_once ABS_PRIVATE_DIR . '/csrf.php'; // Ensure CSRF functions are available
 
 // Secure session settings
 // These are actually set in the php.ini file, but, we can set them here for reference.
